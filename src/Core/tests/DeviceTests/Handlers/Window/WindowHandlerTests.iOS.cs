@@ -10,7 +10,36 @@ namespace Microsoft.Maui.DeviceTests
 	public partial class WindowHandlerTests : CoreHandlerTestBase
 	{
 #if MACCATALYST
-		[Fact]
+
+		[Fact(
+#if CI
+			Skip = "Causes Catalyst test run to hang"
+#endif
+		)]
+		public async Task TitleSetsOnWindow()
+		{
+			var window = new Window
+			{
+				Title = "Initial Title",
+				Page = new ContentPage
+				{
+					Content = new Label { Text = "Yay!" }
+				}
+			};
+
+			await RunWindowTest(window, handler =>
+			{
+				Assert.Equal("Initial Title", handler.PlatformView.WindowScene.Title);
+				window.Title = "Updated Title";
+				Assert.Equal("Updated Title", handler.PlatformView.WindowScene.Title);
+			});
+		}
+
+		[Fact(
+#if CI
+			Skip = "Causes Catalyst test run to hang"
+#endif
+		)]
 		public async Task ContentIsSetInitially()
 		{
 			var window = new Window
@@ -30,13 +59,17 @@ namespace Microsoft.Maui.DeviceTests
 
 				Assert.NotNull(page.View);
 				var content = Assert.IsType<Platform.ContentView>(root.View.Subviews[0]);
-				var btn = Assert.IsType<UIButton>(content.Subviews[0]);
+				var btn = Assert.IsType<UIButton>(content.Subviews[0].Subviews[0]);
 
 				Assert.Equal("Yay!", btn.Title(UIControlState.Normal));
 			});
 		}
 
-		[Fact]
+		[Fact(
+#if CI
+			Skip = "Causes Catalyst test run to hang"
+#endif
+		)]
 		public async Task WindowSupportsEmptyPage_Platform()
 		{
 			var window = new Window(new ContentPage());

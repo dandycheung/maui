@@ -1,4 +1,4 @@
-﻿using Android.Content;
+using Android.Content;
 using Android.Content.Res;
 using Android.Views;
 using Android.Widget;
@@ -99,6 +99,11 @@ namespace Microsoft.Maui.Handlers
 			handler.PlatformView?.UpdateIsTextPredictionEnabled(searchBar, handler.QueryEditor);
 		}
 
+		public static void MapIsSpellCheckEnabled(ISearchBarHandler handler, ISearchBar searchBar)
+		{
+			handler.PlatformView?.UpdateIsSpellCheckEnabled(searchBar, handler.QueryEditor);
+		}
+
 		public static void MapMaxLength(ISearchBarHandler handler, ISearchBar searchBar)
 		{
 			handler.PlatformView?.UpdateMaxLength(searchBar, handler.QueryEditor);
@@ -114,7 +119,14 @@ namespace Microsoft.Maui.Handlers
 			handler.PlatformView?.UpdateCancelButtonColor(searchBar);
 		}
 
-		static void MapFocus(ISearchBarHandler handler, ISearchBar searchBar, object? args)
+		public static void MapKeyboard(ISearchBarHandler handler, ISearchBar searchBar)
+		{
+			handler.UpdateValue(nameof(ISearchBar.Text));
+
+			handler.PlatformView?.UpdateKeyboard(searchBar);
+		}
+
+		public static void MapFocus(ISearchBarHandler handler, ISearchBar searchBar, object? args)
 		{
 			if (args is FocusRequest request)
 				handler.QueryEditor?.Focus(request);

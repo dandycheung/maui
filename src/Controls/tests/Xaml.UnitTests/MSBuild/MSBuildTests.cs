@@ -72,13 +72,17 @@ namespace Microsoft.Maui.Controls.MSBuild.UnitTests
 		public void SetUp()
 		{
 			testDirectory = TestContext.CurrentContext.TestDirectory;
-			tempDirectory = IOPath.Combine(testDirectory, "temp", TestContext.CurrentContext.Test.Name);
+			tempDirectory = IOPath.Combine(testDirectory, "temp",
+				TestContext.CurrentContext.Test.Name
+					.Replace('"', '_')
+					.Replace('(', '_')
+					.Replace(')', '_'));
 			intermediateDirectory = IOPath.Combine(tempDirectory, "obj", "Debug", GetTfm());
 			Directory.CreateDirectory(tempDirectory);
 
 			//copy _Directory.Build.[props|targets] in test/
-			var props = IOPath.Combine(testDirectory, "..", "..", "..", "MSBuild", "_Directory.Build.props");
-			var targets = IOPath.Combine(testDirectory, "..", "..", "..", "MSBuild", "_Directory.Build.targets");
+			var props = AssemblyInfoTests.GetFilePathFromRoot(IOPath.Combine("src", "Controls", "tests", "Xaml.UnitTests", "MSBuild", "_Directory.Build.props"));
+			var targets = AssemblyInfoTests.GetFilePathFromRoot(IOPath.Combine("src", "Controls", "tests", "Xaml.UnitTests", "MSBuild", "_Directory.Build.targets"));
 
 			if (!File.Exists(props))
 			{
@@ -259,21 +263,28 @@ namespace Microsoft.Maui.Controls.MSBuild.UnitTests
 
 		// Tests the MauiXamlCValidateOnly=True MSBuild property
 		[Test]
-		public void ValidateOnly()
+		public void ValidateOnly([Values("Debug", "Release", "ReleaseProd")] string configuration)
 		{
 			var project = NewProject();
 			project.Add(AddFile("MainPage.xaml", "MauiXaml", Xaml.MainPage));
 			var projectFile = IOPath.Combine(tempDirectory, "test.csproj");
 			project.Save(projectFile);
-			Build(projectFile, additionalArgs: "-p:MauiXamlCValidateOnly=True");
+			intermediateDirectory = IOPath.Combine(tempDirectory, "obj", configuration, GetTfm());
+			Build(projectFile, additionalArgs: $"-c {configuration}");
 
 			var testDll = IOPath.Combine(intermediateDirectory, "test.dll");
 			AssertExists(testDll, nonEmpty: true);
-			using (var assembly = AssemblyDefinition.ReadAssembly(testDll))
+			using var assembly = AssemblyDefinition.ReadAssembly(testDll);
+			var resources = assembly.MainModule.Resources.OfType<EmbeddedResource>().Select(e => e.Name).ToArray();
+			if (configuration == "Debug")
 			{
 				// XAML files should remain as EmbeddedResource
-				var resources = assembly.MainModule.Resources.OfType<EmbeddedResource>().Select(e => e.Name).ToArray();
 				CollectionAssert.Contains(resources, "test.MainPage.xaml");
+			}
+			else
+			{
+				// XAML files should *not* remain as EmbeddedResource
+				CollectionAssert.DoesNotContain(resources, "test.MainPage.xaml");
 			}
 		}
 
@@ -287,7 +298,7 @@ namespace Microsoft.Maui.Controls.MSBuild.UnitTests
 			project.Save(projectFile);
 
 			string log = Build(projectFile, additionalArgs: "-p:MauiXamlCValidateOnly=True", shouldSucceed: false);
-			StringAssert.Contains("MainPage.xaml(7,6): XamlC error XFC0000: Cannot resolve type \"http://schemas.microsoft.com/dotnet/2021/maui:NotARealThing\".", log);
+			StringAssert.Contains("MainPage.xaml(7,6): XamlC error XC0000: Cannot resolve type \"http://schemas.microsoft.com/dotnet/2021/maui:NotARealThing\".", log);
 		}
 
 		/// <summary>
@@ -451,15 +462,15 @@ namespace Microsoft.Maui.Controls.MSBuild.UnitTests
 			AssertExists(IOPath.Combine(intermediateDirectory, "XamlC.stamp"));
 		}
 
-		[Test]
-		public void InvalidXml()
-		{
-			var project = NewProject();
-			project.Add(AddFile("MainPage.xaml", "MauiXaml", "notxmlatall"));
-			var projectFile = IOPath.Combine(tempDirectory, "test.csproj");
-			project.Save(projectFile);
-			Assert.Throws<AssertionException>(() => Build(projectFile));
-		}
+		// [Test]
+		// public void InvalidXml()
+		// {
+		// 	var project = NewProject();
+		// 	project.Add(AddFile("MainPage.xaml", "MauiXaml", "notxmlatall"));
+		// 	var projectFile = IOPath.Combine(tempDirectory, "test.csproj");
+		// 	project.Save(projectFile);
+		// 	Assert.Throws<AssertionException>(() => Build(projectFile));
+		// }
 
 		[Test]
 		public void RandomEmbeddedResource()

@@ -1,9 +1,8 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
+using Android.Content;
 using Android.Graphics.Drawables;
-using Android.Views;
 using Android.Widget;
-using Microsoft.Maui.Graphics;
 using AButton = AndroidX.AppCompat.Widget.AppCompatButton;
 using ATextAlignment = Android.Views.TextAlignment;
 using AView = Android.Views.View;
@@ -15,7 +14,7 @@ namespace Microsoft.Maui.Handlers
 		protected override void ConnectHandler(AView platformView)
 		{
 			base.ConnectHandler(platformView);
-			PlatformView.ViewAttachedToWindow += OnViewAttachedToWindow;
+			platformView.ViewAttachedToWindow += OnViewAttachedToWindow;
 		}
 
 		void OnViewAttachedToWindow(object? sender, AView.ViewAttachedToWindowEventArgs e)
@@ -92,18 +91,18 @@ namespace Microsoft.Maui.Handlers
 			return swipeButton;
 		}
 
-		int GetIconSize()
+		static int GetIconSize(ISwipeItemMenuItemHandler handler)
 		{
-			if (VirtualView is not IImageSourcePart imageSourcePart || imageSourcePart.Source == null)
+			if (handler.VirtualView is not IImageSourcePart imageSourcePart || imageSourcePart.Source is null)
 				return 0;
 
-			var mauiSwipeView = PlatformView.Parent.GetParentOfType<MauiSwipeView>();
+			var mauiSwipeView = handler.PlatformView.Parent.GetParentOfType<MauiSwipeView>();
 
-			if (mauiSwipeView == null || MauiContext?.Context == null)
+			if (mauiSwipeView is null || handler.MauiContext?.Context is null)
 				return 0;
 
-			int contentHeight = mauiSwipeView.Height;
-			int contentWidth = (int)MauiContext.Context.ToPixels(SwipeViewExtensions.SwipeItemWidth);
+			int contentHeight = mauiSwipeView.MeasuredHeight;
+			int contentWidth = (int)handler.MauiContext.Context.ToPixels(SwipeViewExtensions.SwipeItemWidth);
 
 			return Math.Min(contentHeight, contentWidth) / 2;
 		}
@@ -115,61 +114,68 @@ namespace Microsoft.Maui.Handlers
 			if (mauiSwipeView == null)
 				return;
 
-			var contentHeight = mauiSwipeView.Height;
+			var contentHeight = mauiSwipeView.MeasuredHeight;
 
 			var swipeView = VirtualView?.FindParentOfType<ISwipeView>();
+			float density = mauiSwipeView.Context.GetDisplayDensity();
 
 			if (swipeView?.Content is IView content)
 			{
-				float density = mauiSwipeView.Context.GetDisplayDensity();
 				var verticalThickness = (int)(content.Margin.VerticalThickness * density);
 				contentHeight -= verticalThickness;
 			}
 
-			var textSize = 0;
+			var lineHeight = 0;
 
 			if (PlatformView is TextView textView)
 			{
-				textSize = !string.IsNullOrEmpty(textView.Text) ? (int)textView.TextSize : 0;
+				lineHeight = !string.IsNullOrEmpty(textView.Text) ? (int)textView.LineHeight : 0;
 				var icons = textView.GetCompoundDrawables();
 				if (icons.Length > 1 && icons[1] != null)
 				{
-					OnSetImageSource(icons[1]);
+					SourceLoader.Setter.SetImageSource(icons[1]);
 				}
 			}
 
-			var iconSize = GetIconSize();
-			var buttonPadding = (contentHeight - (iconSize + textSize + 6)) / 2;
+			var iconSize = GetIconSize(this);
+			var textPadding = 2 * density;
+			var buttonPadding = (int)((contentHeight - (iconSize + lineHeight + textPadding)) / 2);
 			PlatformView.SetPadding(0, buttonPadding, 0, buttonPadding);
 		}
 
-		void OnSetImageSource(Drawable? drawable)
+		partial class SwipeItemMenuItemImageSourcePartSetter
 		{
-			if (drawable != null)
+			public override void SetImageSource(Drawable? platformImage)
 			{
-				var iconSize = GetIconSize();
-				var textColor = VirtualView.GetTextColor()?.ToPlatform();
-				int drawableWidth = drawable.IntrinsicWidth;
-				int drawableHeight = drawable.IntrinsicHeight;
+				if (Handler?.PlatformView is not TextView button || Handler?.VirtualView is not ISwipeItemMenuItem item)
+					return;
 
-				if (drawableWidth > drawableHeight)
+				if (platformImage is not null)
 				{
-					var iconWidth = iconSize;
-					var iconHeight = drawableHeight * iconWidth / drawableWidth;
-					drawable.SetBounds(0, 0, iconWidth, iconHeight);
-				}
-				else
-				{
-					var iconHeight = iconSize;
-					var iconWidth = drawableWidth * iconHeight / drawableHeight;
-					drawable.SetBounds(0, 0, iconWidth, iconHeight);
+					var iconSize = GetIconSize(Handler);
+					var textColor = item.GetTextColor()?.ToPlatform();
+					int drawableWidth = platformImage.IntrinsicWidth;
+					int drawableHeight = platformImage.IntrinsicHeight;
+
+					if (drawableWidth > drawableHeight)
+					{
+						var iconWidth = iconSize;
+						var iconHeight = drawableHeight * iconWidth / drawableWidth;
+						platformImage.SetBounds(0, 0, iconWidth, iconHeight);
+					}
+					else
+					{
+						var iconHeight = iconSize;
+						var iconWidth = drawableWidth * iconHeight / drawableHeight;
+						platformImage.SetBounds(0, 0, iconWidth, iconHeight);
+					}
+
+					if (textColor != null)
+						platformImage.SetColorFilter(textColor.Value, FilterMode.SrcAtop);
 				}
 
-				if (textColor != null)
-					drawable.SetColorFilter(textColor.Value, FilterMode.SrcAtop);
+				button.SetCompoundDrawables(null, platformImage, null, null);
 			}
-
-			(PlatformView as TextView)?.SetCompoundDrawables(null, drawable, null, null);
 		}
 	}
 }

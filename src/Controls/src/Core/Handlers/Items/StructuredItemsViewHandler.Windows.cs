@@ -16,6 +16,10 @@ namespace Microsoft.Maui.Controls.Handlers.Items
 	{
 		View _currentHeader;
 		View _currentFooter;
+		WeakNotifyPropertyChangedProxy _layoutPropertyChangedProxy;
+		PropertyChangedEventHandler _layoutPropertyChanged;
+
+		~StructuredItemsViewHandler() => _layoutPropertyChangedProxy?.Unsubscribe();
 
 		protected override IItemsLayout Layout { get => ItemsView?.ItemsLayout; }
 
@@ -24,15 +28,26 @@ namespace Microsoft.Maui.Controls.Handlers.Items
 			base.ConnectHandler(platformView);
 
 			if (Layout is not null)
-				Layout.PropertyChanged += LayoutPropertyChanged;
+			{
+				_layoutPropertyChanged ??= LayoutPropertyChanged;
+				_layoutPropertyChangedProxy = new WeakNotifyPropertyChangedProxy(Layout, _layoutPropertyChanged);
+			}
+			else if (_layoutPropertyChangedProxy is not null)
+			{
+				_layoutPropertyChangedProxy.Unsubscribe();
+				_layoutPropertyChangedProxy = null;
+			}
 		}
 
 		protected override void DisconnectHandler(ListViewBase platformView)
 		{
 			base.DisconnectHandler(platformView);
 
-			if (Layout is not null)
-				Layout.PropertyChanged -= LayoutPropertyChanged;
+			if (_layoutPropertyChangedProxy is not null)
+			{
+				_layoutPropertyChangedProxy.Unsubscribe();
+				_layoutPropertyChangedProxy = null;
+			}
 		}
 
 		void LayoutPropertyChanged(object sender, PropertyChangedEventArgs e)
@@ -93,7 +108,7 @@ namespace Microsoft.Maui.Controls.Handlers.Items
 				_currentHeader = null;
 			}
 
-			var header = ItemsView.Header;
+			var header = ItemsView.Header ?? ItemsView.HeaderTemplate;
 
 			switch (header)
 			{
@@ -118,7 +133,7 @@ namespace Microsoft.Maui.Controls.Handlers.Items
 					if (headerTemplate != null)
 					{
 						ListViewBase.HeaderTemplate = ItemsViewTemplate;
-						ListViewBase.Header = new ItemTemplateContext(headerTemplate, header, Element);
+						ListViewBase.Header = new ItemTemplateContext(headerTemplate, header, Element, mauiContext: MauiContext);
 					}
 					else
 					{
@@ -142,7 +157,7 @@ namespace Microsoft.Maui.Controls.Handlers.Items
 				_currentFooter = null;
 			}
 
-			var footer = ItemsView.Footer;
+			var footer = ItemsView.Footer ?? ItemsView.FooterTemplate;
 
 			switch (footer)
 			{
@@ -167,7 +182,7 @@ namespace Microsoft.Maui.Controls.Handlers.Items
 					if (footerTemplate != null)
 					{
 						ListViewBase.FooterTemplate = ItemsViewTemplate;
-						ListViewBase.Footer = new ItemTemplateContext(footerTemplate, footer, Element);
+						ListViewBase.Footer = new ItemTemplateContext(footerTemplate, footer, Element, mauiContext: MauiContext);
 					}
 					else
 					{
@@ -180,7 +195,7 @@ namespace Microsoft.Maui.Controls.Handlers.Items
 
 		static ListViewBase CreateGridView(GridItemsLayout gridItemsLayout)
 		{
-			return new FormsGridView
+			var gridView = new FormsGridView
 			{
 				Orientation = gridItemsLayout.Orientation == ItemsLayoutOrientation.Horizontal
 					? Orientation.Horizontal
@@ -189,6 +204,14 @@ namespace Microsoft.Maui.Controls.Handlers.Items
 				Span = gridItemsLayout.Span,
 				ItemContainerStyle = GetItemContainerStyle(gridItemsLayout)
 			};
+
+			if (gridView.Orientation == Orientation.Horizontal)
+			{
+				ScrollViewer.SetVerticalScrollMode(gridView, WScrollMode.Disabled);
+				ScrollViewer.SetHorizontalScrollMode(gridView, WScrollMode.Enabled);
+			}
+
+			return gridView;
 		}
 
 		static ListViewBase CreateVerticalListView(LinearItemsLayout listItemsLayout)

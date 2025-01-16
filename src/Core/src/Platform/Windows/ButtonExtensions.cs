@@ -1,4 +1,5 @@
 #nullable enable
+using Microsoft.Graphics.Canvas.UI.Xaml;
 using Microsoft.Maui.Graphics;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -109,19 +110,24 @@ namespace Microsoft.Maui.Platform
 
 		public static void UpdateTextColor(this ButtonBase platformButton, Color textColor)
 		{
+			platformButton.UpdateTextColor(textColor, TextColorResourceKeys);
+		}
+
+		internal static void UpdateTextColor(this ButtonBase platformButton, Color textColor, string[] resourceKeys)
+		{
 			var brush = textColor?.ToPlatform();
 
 			if (brush is null)
 			{
 				// Windows.Foundation.UniversalApiContract < 5
-				platformButton.Resources.RemoveKeys(TextColorResourceKeys);
+				platformButton.Resources.RemoveKeys(resourceKeys);
 				// Windows.Foundation.UniversalApiContract >= 5
 				platformButton.ClearValue(Button.ForegroundProperty);
 			}
 			else
 			{
 				// Windows.Foundation.UniversalApiContract < 5
-				platformButton.Resources.SetValueForAllKey(TextColorResourceKeys, brush);
+				platformButton.Resources.SetValueForAllKey(resourceKeys, brush);
 				// Windows.Foundation.UniversalApiContract >= 5
 				platformButton.Foreground = brush;
 			}
@@ -154,39 +160,34 @@ namespace Microsoft.Maui.Platform
 		{
 			if (platformButton.GetContent<WImage>() is WImage nativeImage)
 			{
-				nativeImage.Source = nativeImageSource;
-
-				if (nativeImageSource is not null)
+				// If we're a CanvasImageSource (font image source), we need to explicitly set the image height
+				// to the desired size of the font, otherwise it will be stretched to the available space
+				if (nativeImageSource is CanvasImageSource canvas)
 				{
-					// set the base size if we can
-					{
-						var imageSourceSize = nativeImageSource.GetImageSourceSize(platformButton);
-						nativeImage.Width = imageSourceSize.Width;
-						nativeImage.Height = imageSourceSize.Height;
-					}
+					var size = canvas.GetImageSourceSize(platformButton);
+					nativeImage.Width = size.Width;
+					nativeImage.Height = size.Height;
+					nativeImage.MaxHeight = double.PositiveInfinity;
+				}
 
-					// BitmapImage is a special case that has an event when the image is loaded
-					// when this happens, we want to resize the button
-					if (nativeImageSource is BitmapImage bitmapImage)
+				// Ensure that we only scale images down and never up
+				if (nativeImageSource is BitmapImage bitmapImage)
+				{
+					// This will fire after `nativeImageSource.Source` is set
+					bitmapImage.ImageOpened += OnImageOpened;
+					void OnImageOpened(object sender, RoutedEventArgs e)
 					{
-						bitmapImage.ImageOpened += OnImageOpened;
+						bitmapImage.ImageOpened -= OnImageOpened;
 
-						void OnImageOpened(object sender, RoutedEventArgs e)
+						var actualImageSource = sender as BitmapImage;
+						if (actualImageSource is not null)
 						{
-							bitmapImage.ImageOpened -= OnImageOpened;
-
-							// Check if the image that just loaded is still the current image
-							var actualImageSource = sender as BitmapImage;
-
-							if (actualImageSource is not null && nativeImage.Source == actualImageSource)
-								nativeImage.Height = nativeImage.Width = Primitives.Dimension.Unset;
-
-							if (platformButton.Parent is FrameworkElement frameworkElement)
-								frameworkElement.InvalidateMeasure();
-						};
+							nativeImage.MaxHeight = nativeImageSource.GetImageSourceSize(platformButton).Height;
+						}
 					}
 				}
 
+				nativeImage.Source = nativeImageSource;
 				nativeImage.Visibility = nativeImageSource == null
 					? UI.Xaml.Visibility.Collapsed
 					: UI.Xaml.Visibility.Visible;
@@ -197,17 +198,29 @@ namespace Microsoft.Maui.Platform
 			where T : FrameworkElement
 		{
 			if (platformButton.Content is null)
+			{
 				return null;
+			}
 
 			if (platformButton.Content is T t)
+			{
 				return t;
+			}
 
 			if (platformButton.Content is Panel panel)
 			{
-				foreach (var child in panel.Children)
+#pragma warning disable RS0030 // Do not use banned APIs; Panel.Children is banned for performance reasons. MauiPanel might not be used everywhere though.
+				var children = panel is MauiPanel mauiPanel
+					? mauiPanel.CachedChildren
+					: panel.Children;
+#pragma warning restore RS0030 // Do not use banned APIs
+
+				foreach (var child in children)
 				{
 					if (child is T c)
+					{
 						return c;
+					}
 				}
 			}
 

@@ -4,12 +4,12 @@ using Android.Graphics;
 using Android.Runtime;
 using Android.Util;
 using Android.Views;
+using Microsoft.Maui.Graphics;
 using Microsoft.Maui.Graphics.Platform;
 
 namespace Microsoft.Maui.Platform
 {
-	// TODO ezhart At this point, this is almost exactly a clone of LayoutViewGroup; we may be able to drop this class entirely
-	public class ContentViewGroup : ViewGroup
+	public class ContentViewGroup : PlatformContentViewGroup, ICrossPlatformLayoutBacking, IVisualTreeElementProvidable
 	{
 		IBorderStroke? _clip;
 		readonly Context _context;
@@ -41,12 +41,19 @@ namespace Microsoft.Maui.Platform
 			_context = context;
 		}
 
-		protected override void DispatchDraw(Canvas? canvas)
+		public ICrossPlatformLayout? CrossPlatformLayout
 		{
-			if (Clip != null)
-				ClipChild(canvas);
+			get; set;
+		}
 
-			base.DispatchDraw(canvas);
+		Graphics.Size CrossPlatformMeasure(double widthConstraint, double heightConstraint)
+		{
+			return CrossPlatformLayout?.CrossPlatformMeasure(widthConstraint, heightConstraint) ?? Graphics.Size.Zero;
+		}
+
+		Graphics.Size CrossPlatformArrange(Graphics.Rect bounds)
+		{
+			return CrossPlatformLayout?.CrossPlatformArrange(bounds) ?? Graphics.Size.Zero;
 		}
 
 		protected override void OnMeasure(int widthMeasureSpec, int heightMeasureSpec)
@@ -98,31 +105,43 @@ namespace Microsoft.Maui.Platform
 			set
 			{
 				_clip = value;
-				PostInvalidate();
+				// NOTE: calls PostInvalidate()
+				SetHasClip(_clip is not null);
 			}
 		}
 
-		internal Func<double, double, Graphics.Size>? CrossPlatformMeasure { get; set; }
-		internal Func<Graphics.Rect, Graphics.Size>? CrossPlatformArrange { get; set; }
-
-		void ClipChild(Canvas? canvas)
+		protected override Path? GetClipPath(int width, int height)
 		{
-			if (Clip == null || canvas == null)
-				return;
+			if (Clip is null || Clip?.Shape is null)
+				return null;
 
 			float density = _context.GetDisplayDensity();
+			float strokeThickness = (float)Clip.StrokeThickness;
 
-			float strokeThickness = (float)(Clip.StrokeThickness * density);
-			float offset = strokeThickness / 2;
-			float w = (canvas.Width / density) - strokeThickness;
-			float h = (canvas.Height / density) - strokeThickness;
+			// We need to inset the content clipping by the width of the stroke on both sides
+			// (top and bottom, left and right), so we remove it twice from the total width/height 
+			var strokeInset = 2 * strokeThickness;
+			float w = (width / density) - strokeInset;
+			float h = (height / density) - strokeInset;
+			float x = strokeThickness;
+			float y = strokeThickness;
+			IShape clipShape = Clip.Shape;
 
-			var bounds = new Graphics.RectF(offset, offset, w, h);
-			var path = Clip.Shape?.PathForBounds(bounds);
-			var currentPath = path?.AsAndroidPath(scaleX: density, scaleY: density);
+			var bounds = new Graphics.RectF(x, y, w, h);
 
-			if (currentPath != null)
-				canvas.ClipPath(currentPath);
+			Path? platformPath = clipShape.ToPlatform(bounds, strokeThickness, density, true);
+			return platformPath;
+		}
+
+		IVisualTreeElement? IVisualTreeElementProvidable.GetElement()
+		{
+			if (CrossPlatformLayout is IVisualTreeElement layoutElement &&
+				layoutElement.IsThisMyPlatformView(this))
+			{
+				return layoutElement;
+			}
+
+			return null;
 		}
 	}
 }

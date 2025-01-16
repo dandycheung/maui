@@ -27,7 +27,7 @@ namespace Microsoft.Maui.Hosting
 			builder.ConfigureLifecycleEvents(life =>
 			{
 #if __ANDROID__
-				ApplicationModel.Platform.Init(MauiApplication.Current);
+				ApplicationModel.Platform.Init((Android.App.Application)Android.App.Application.Context);
 
 				life.AddAndroid(android => android
 					.OnCreate((activity, savedInstanceState) =>
@@ -69,6 +69,10 @@ namespace Microsoft.Maui.Hosting
 					.OnLaunched((application, args) =>
 					{
 						ApplicationModel.Platform.OnLaunched(args);
+					})
+					.OnPlatformWindowSubclassed((window, context) =>
+					{
+						ApplicationModel.Platform.OnPlatformWindowInitialized(window);
 					}));
 #elif TIZEN
 

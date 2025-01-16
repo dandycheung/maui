@@ -13,10 +13,8 @@ namespace Microsoft.Maui.Devices
 {
 	class FlashlightImplementation : IFlashlight
 	{
-		static CameraManager cameraManager;
-
 		static CameraManager CameraManager =>
-			cameraManager ??= Application.Context.GetSystemService(Context.CameraService) as CameraManager;
+			Application.Context.GetSystemService(Context.CameraService) as CameraManager;
 
 		static readonly object locker = new object();
 
@@ -33,6 +31,12 @@ namespace Microsoft.Maui.Devices
 			=> PlatformUtils.HasSystemFeature(PackageManager.FeatureCameraFlash);
 
 		internal bool AlwaysUseCameraApi { get; set; } = false;
+
+		/// <summary>
+		/// Checks if the flashlight is available and can be turned on or off.
+		/// </summary>
+		/// <returns><see langword="true"/> when the flashlight is available, or <see langword="false"/> when not</returns>
+		public Task<bool> IsSupportedAsync() => Task.FromResult(IsSupported);
 
 		public async Task TurnOnAsync()
 		{

@@ -60,7 +60,7 @@ namespace Microsoft.Maui.Controls.Xaml
 					lookupAssemblies.Add(new XmlnsDefinitionAttribute(namespaceURI, ns) { AssemblyName = asmstring });
 			}
 
-			var lookupNames = new List<string>();
+			var lookupNames = new List<string>(capacity: 2);
 			if (elementName != "DataTemplate" && !elementName.EndsWith("Extension", StringComparison.Ordinal))
 				lookupNames.Add(elementName + "Extension");
 			lookupNames.Add(elementName);
@@ -78,8 +78,19 @@ namespace Microsoft.Maui.Controls.Xaml
 
 			var potentialTypes = new List<(string typeName, string clrNamespace, string assemblyName)>();
 			foreach (string typeName in lookupNames)
+			{
 				foreach (XmlnsDefinitionAttribute xmlnsDefinitionAttribute in lookupAssemblies)
+				{
 					potentialTypes.Add(new(typeName, xmlnsDefinitionAttribute.ClrNamespace, xmlnsDefinitionAttribute.AssemblyName));
+
+					// As a fallback, for assembly=mscorlib try assembly=System.Private.CoreLib
+					if (xmlnsDefinitionAttribute.AssemblyName is string assemblyName &&
+						(assemblyName == "mscorlib" || assemblyName.StartsWith("mscorlib,", StringComparison.Ordinal)))
+					{
+						potentialTypes.Add(new(typeName, xmlnsDefinitionAttribute.ClrNamespace, "System.Private.CoreLib"));
+					}
+				}
+			}
 
 			T? type = null;
 			foreach (var typeInfo in potentialTypes)

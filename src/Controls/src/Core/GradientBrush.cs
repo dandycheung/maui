@@ -17,7 +17,7 @@ namespace Microsoft.Maui.Controls
 
 		public event EventHandler InvalidateGradientBrushRequested;
 
-		/// <include file="../../docs/Microsoft.Maui.Controls/GradientBrush.xml" path="//Member[@MemberName='GradientStopsProperty']/Docs/*" />
+		/// <summary>Bindable property for <see cref="GradientStops"/>.</summary>
 		public static readonly BindableProperty GradientStopsProperty =
 			BindableProperty.Create(nameof(GradientStops), typeof(GradientStopCollection), typeof(GradientBrush), null,
 				propertyChanged: OnGradientStopsChanged);
@@ -28,6 +28,9 @@ namespace Microsoft.Maui.Controls
 			get => (GradientStopCollection)GetValue(GradientStopsProperty);
 			set => SetValue(GradientStopsProperty, value);
 		}
+
+		public override bool IsEmpty =>
+			GradientStops is null || GradientStops.Count == 0;
 
 		static void OnGradientStopsChanged(BindableObject bindable, object oldValue, object newValue)
 		{

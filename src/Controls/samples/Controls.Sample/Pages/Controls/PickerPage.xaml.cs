@@ -20,6 +20,8 @@ namespace Maui.Controls.Sample.Pages
 
 			BindingContext = this;
 
+			UpdatePickerBackground();
+
 			Loaded += (s, e) =>
 			{
 				DynamicItemsPicker.Items.Add("Item 1");
@@ -154,8 +156,8 @@ namespace Maui.Controls.Sample.Pages
 
 	public class PickerData
 	{
-		public string Name { get; set; }
+		public string? Name { get; set; }
 
-		public ObservableCollection<PickerData> PickerItems { get; set; }
+		public ObservableCollection<PickerData>? PickerItems { get; set; }
 	}
 }

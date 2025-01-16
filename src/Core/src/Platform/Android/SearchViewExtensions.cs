@@ -126,9 +126,22 @@ namespace Microsoft.Maui.Platform
 				return;
 
 			if (searchBar.IsTextPredictionEnabled)
-				editText.InputType &= ~InputTypes.TextFlagNoSuggestions;
+				editText.InputType |= InputTypes.TextFlagAutoCorrect;
 			else
+				editText.InputType &= ~InputTypes.TextFlagAutoCorrect;
+		}
+
+		public static void UpdateIsSpellCheckEnabled(this SearchView searchView, ISearchBar searchBar, EditText? editText = null)
+		{
+			editText ??= searchView.GetFirstChildOfType<EditText>();
+
+			if (editText == null)
+				return;
+
+			if (!searchBar.IsSpellCheckEnabled)
 				editText.InputType |= InputTypes.TextFlagNoSuggestions;
+			else
+				editText.InputType &= ~InputTypes.TextFlagNoSuggestions;
 		}
 
 		public static void UpdateIsEnabled(this SearchView searchView, ISearchBar searchBar, EditText? editText = null)
@@ -142,6 +155,21 @@ namespace Microsoft.Maui.Platform
 			{
 				editText.Enabled = searchBar.IsEnabled;
 			}
+		}
+
+		public static void UpdateKeyboard(this SearchView searchView, ISearchBar searchBar)
+		{
+			searchView.SetInputType(searchBar);
+		}
+
+		internal static void SetInputType(this SearchView searchView, ISearchBar searchBar, EditText? editText = null)
+		{
+			editText ??= searchView.GetFirstChildOfType<EditText>();
+
+			if (editText == null)
+				return;
+
+			editText.SetInputType(searchBar);
 		}
 	}
 }

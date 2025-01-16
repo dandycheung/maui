@@ -13,7 +13,11 @@ namespace Microsoft.Maui.Controls.Internals
 		NavigationProxy NavigationProxy { get; }
 	}
 
-	/// <include file="../../docs/Microsoft.Maui.Controls.Internals/NavigationProxy.xml" path="Type[@FullName='Microsoft.Maui.Controls.Internals.NavigationProxy']/Docs/*" />
+	/// <summary>Represents an object capable of handling stack-based navigation via proxying.</summary>
+	/// <remarks>
+	///		<para>Elements may use navigation proxies to delegate navigation capabilities to their parents if they themselves can't handle it.</para>
+	///		<para>For internal use for .NET MAUI.</para>
+	///	</remarks>
 	[EditorBrowsable(EditorBrowsableState.Never)]
 	public class NavigationProxy : INavigation
 	{
@@ -34,7 +38,7 @@ namespace Microsoft.Maui.Controls.Internals
 				// reverse so that things go into the new stack in the same order
 				// null out to release memory that will likely never be needed again
 
-				if (ReferenceEquals(_inner, null))
+				if (_inner is null)
 				{
 					_pushStack = new Lazy<List<Page>>(() => new List<Page>());
 					_modalStack = new Lazy<NavigatingStepRequestList>(() => new NavigatingStepRequestList());

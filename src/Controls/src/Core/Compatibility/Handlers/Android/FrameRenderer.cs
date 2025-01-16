@@ -14,10 +14,9 @@ using Color = Microsoft.Maui.Graphics.Color;
 
 namespace Microsoft.Maui.Controls.Handlers.Compatibility
 {
+	[Obsolete("Frame is obsolete as of .NET 9. Please use Border instead.")]
 	public class FrameRenderer : CardView, IPlatformViewHandler
 	{
-		const int FrameBorderThickness = 3;
-
 		public static IPropertyMapper<Frame, FrameRenderer> Mapper
 			= new PropertyMapper<Frame, FrameRenderer>(ViewRenderer.VisualElementRendererMapper)
 			{
@@ -82,6 +81,8 @@ namespace Microsoft.Maui.Controls.Handlers.Compatibility
 			}
 		}
 
+		IView? VirtualView => Element;
+
 		Size IViewHandler.GetDesiredSize(double widthConstraint, double heightConstraint)
 		{
 			var virtualView = (this as IViewHandler)?.VirtualView;
@@ -131,7 +132,6 @@ namespace Microsoft.Maui.Controls.Handlers.Compatibility
 				{
 					var child = GetChildAt(0);
 					child?.RemoveFromParent();
-					child?.Dispose();
 				}
 
 				Element?.Handler?.DisconnectHandler();
@@ -158,15 +158,12 @@ namespace Microsoft.Maui.Controls.Handlers.Compatibility
 		protected override void OnMeasure(int widthMeasureSpec, int heightMeasureSpec)
 		{
 			if (Element?.Handler is IPlatformViewHandler pvh &&
-				Element is IContentView cv)
+				Element is ICrossPlatformLayout cpl &&
+				VirtualView is not null &&
+				Context is not null)
 			{
-				var borderThickness = (Element.BorderColor.IsNotDefault() ? FrameBorderThickness : 0) * 2;
-
-				var size = pvh.MeasureVirtualView(
-					widthMeasureSpec - borderThickness,
-					heightMeasureSpec - borderThickness,
-					cv.CrossPlatformMeasure);
-				SetMeasuredDimension((int)size.Width + borderThickness, (int)size.Height + borderThickness);
+				var measure = pvh.MeasureVirtualView(widthMeasureSpec, heightMeasureSpec, cpl.CrossPlatformMeasure);
+				SetMeasuredDimension((int)measure.Width, (int)measure.Height);
 			}
 			else
 				base.OnMeasure(widthMeasureSpec, heightMeasureSpec);
@@ -179,7 +176,7 @@ namespace Microsoft.Maui.Controls.Handlers.Compatibility
 
 
 			if (Element.Handler is IPlatformViewHandler pvh &&
-				Element is IContentView cv)
+				Element is ICrossPlatformLayout cv)
 			{
 				pvh.LayoutVirtualView(l, t, r, b, cv.CrossPlatformArrange);
 			}
@@ -200,6 +197,7 @@ namespace Microsoft.Maui.Controls.Handlers.Compatibility
 
 		public override void Draw(Canvas? canvas)
 		{
+			ArgumentNullException.ThrowIfNull(canvas);
 			Controls.Compatibility.Platform.Android.CanvasExtensions.ClipShape(canvas, Context, Element);
 
 			base.Draw(canvas);
@@ -274,6 +272,8 @@ namespace Microsoft.Maui.Controls.Handlers.Compatibility
 					_backgroundDrawable = new GradientDrawable();
 					_backgroundDrawable.SetShape(ShapeType.Rectangle);
 					this.SetBackground(_backgroundDrawable);
+					UpdateBorderColor();
+					UpdateCornerRadius();
 				}
 
 				UpdateBackgroundColor();
@@ -295,8 +295,14 @@ namespace Microsoft.Maui.Controls.Handlers.Compatibility
 
 			if (borderColor == null)
 				_backgroundDrawable.SetStroke(0, AColor.Transparent);
-			else
-				_backgroundDrawable.SetStroke(FrameBorderThickness, borderColor.ToPlatform());
+			else if (VirtualView is IBorderElement be)
+			{
+				var borderWidth = be.BorderWidth;
+				if (borderWidth < 0 || borderWidth == Primitives.Dimension.Unset)
+					borderWidth = 0;
+
+				_backgroundDrawable.SetStroke((int)Context.ToPixels(borderWidth), borderColor.ToPlatform());
+			}
 		}
 
 		void UpdateShadow()

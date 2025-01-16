@@ -2,6 +2,7 @@
 using Android.Animation;
 using Android.Content;
 using Android.Graphics;
+using Android.Hardware.Lights;
 using Android.Runtime;
 using Android.Util;
 using Android.Views;
@@ -17,9 +18,9 @@ namespace Microsoft.Maui.Platform
 		MauiHorizontalScrollView? _hScrollView;
 		bool _isBidirectional;
 		ScrollOrientation _scrollOrientation = ScrollOrientation.Vertical;
-		ScrollBarVisibility _defaultHorizontalScrollVisibility = 0;
-		ScrollBarVisibility _defaultVerticalScrollVisibility = 0;
-		ScrollBarVisibility _horizontalScrollVisibility = 0;
+		ScrollBarVisibility _defaultHorizontalScrollVisibility;
+		ScrollBarVisibility _defaultVerticalScrollVisibility;
+		ScrollBarVisibility _horizontalScrollVisibility;
 
 		internal float LastX { get; set; }
 		internal float LastY { get; set; }
@@ -84,6 +85,7 @@ namespace Microsoft.Maui.Platform
 
 		public void SetOrientation(ScrollOrientation orientation)
 		{
+			bool orientationChanged = _scrollOrientation != orientation;
 			_scrollOrientation = orientation;
 
 			if (orientation == ScrollOrientation.Horizontal || orientation == ScrollOrientation.Both)
@@ -107,6 +109,12 @@ namespace Microsoft.Maui.Platform
 					}
 
 					AddView(_hScrollView);
+				}
+				// If the user has changed between horiztonal and both we want to request a new layout
+				// so the Horizontal Layout can be adjusted to satisfy the new orientation.
+				else if (orientationChanged)
+				{
+					PlatformInterop.RequestLayoutIfNeeded(this);
 				}
 			}
 			else
@@ -142,7 +150,7 @@ namespace Microsoft.Maui.Platform
 
 		public override bool OnTouchEvent(MotionEvent? ev)
 		{
-			if (ev == null || !Enabled)
+			if (ev == null || !Enabled || _scrollOrientation == ScrollOrientation.Neither)
 				return false;
 
 			if (ShouldSkipOnTouch)
@@ -181,7 +189,26 @@ namespace Microsoft.Maui.Platform
 			base.AwakenScrollBars();
 		}
 
-		bool IScrollBarView.ScrollBarsInitialized { get; set; } = false;
+		bool IScrollBarView.ScrollBarsInitialized { get; set; }
+
+		protected override void OnMeasure(int widthMeasureSpec, int heightMeasureSpec)
+		{
+			base.OnMeasure(widthMeasureSpec, heightMeasureSpec);
+
+			// If we have bidirectional scrolling then we can just let everything flow through naturally.
+			// The HorizontalScrollView will automatically size its height to the content and thus enable
+			// vertical scolling
+			// If we're only enabling horizontal scrolling then we want to force the horizontal scrollView
+			// to be the same size as the NestedScrollView this way it can't be scrolled vertically
+			if (_hScrollView?.Parent == this && _content is not null && !_isBidirectional)
+			{
+				var hScrollViewHeight = this.MeasuredHeight;
+				var hScrollViewWidth = this.MeasuredWidth;
+
+				_hScrollView.Measure(MeasureSpec.MakeMeasureSpec(hScrollViewWidth, MeasureSpecMode.Exactly),
+					MeasureSpec.MakeMeasureSpec(hScrollViewHeight, MeasureSpecMode.Exactly));
+			}
+		}
 
 		protected override void OnLayout(bool changed, int left, int top, int right, int bottom)
 		{
@@ -189,12 +216,14 @@ namespace Microsoft.Maui.Platform
 
 			if (_hScrollView?.Parent == this && _content is not null)
 			{
-				double scrollViewContentHeight = _content.Height;
+				var scrollViewContentHeight = _content.Height;
 				var hScrollViewHeight = bottom - top;
+				var hScrollViewWidth = right - left;
+
 				//if we are scrolling both ways we need to lay out our MauiHorizontalScrollView with more than the available height
 				//so its parent the NestedScrollView can scroll vertically
-				var newBottom = _isBidirectional ? Math.Max(hScrollViewHeight, scrollViewContentHeight) : hScrollViewHeight;
-				_hScrollView.Layout(0, 0, right - left, (int)newBottom);
+				hScrollViewHeight = _isBidirectional ? Math.Max(hScrollViewHeight, scrollViewContentHeight) : hScrollViewHeight;
+				_hScrollView.Layout(0, 0, hScrollViewWidth, hScrollViewHeight);
 			}
 
 			if (CrossPlatformArrange == null)
@@ -282,7 +311,9 @@ namespace Microsoft.Maui.Platform
 			animator.Start();
 		}
 
+#pragma warning disable CA1822 // DO NOT REMOVE! Needed because dotnet format will else try to make this static and break things
 		void IOnScrollChangeListener.OnScrollChange(NestedScrollView v, int scrollX, int scrollY, int oldScrollX, int oldScrollY)
+#pragma warning restore CA1822
 		{
 			OnScrollChanged(scrollX, scrollY, oldScrollX, oldScrollY);
 		}
@@ -301,6 +332,7 @@ namespace Microsoft.Maui.Platform
 		public MauiHorizontalScrollView(Context? context, MauiScrollView parentScrollView) : base(context)
 		{
 			_parentScrollView = parentScrollView;
+			Tag = "Microsoft.Maui.Android.HorizontalScrollView";
 		}
 
 		public MauiHorizontalScrollView(Context? context, IAttributeSet? attrs) : base(context, attrs)
@@ -321,10 +353,9 @@ namespace Microsoft.Maui.Platform
 		{
 			try
 			{
-				if (canvas != null)
-					canvas.ClipRect(canvas.ClipBounds);
+				canvas?.ClipRect(canvas?.ClipBounds!);
 
-				base.Draw(canvas);
+				base.Draw(canvas!);
 			}
 			catch (Java.Lang.NullPointerException)
 			{
@@ -405,7 +436,7 @@ namespace Microsoft.Maui.Platform
 			base.AwakenScrollBars();
 		}
 
-		bool IScrollBarView.ScrollBarsInitialized { get; set; } = false;
+		bool IScrollBarView.ScrollBarsInitialized { get; set; }
 
 		protected override void OnScrollChanged(int l, int t, int oldl, int oldt)
 		{

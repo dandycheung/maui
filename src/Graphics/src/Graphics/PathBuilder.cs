@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace Microsoft.Maui.Graphics
 {
@@ -33,7 +32,7 @@ namespace Microsoft.Maui.Graphics
 			{
 				string vValueAsString = _commandStack.Pop();
 
-				if ("1".Equals(vValueAsString))
+				if ("1".Equals(vValueAsString, StringComparison.Ordinal))
 				{
 					return true;
 				}
@@ -112,11 +111,21 @@ namespace Microsoft.Maui.Graphics
 #if DEBUG_PATH
 				System.Diagnostics.Debug.WriteLine(aPathString);
 #endif
+#if NETSTANDARD2_0
 				pathAsString = pathAsString.Replace("Infinity", "0");
-				pathAsString = Regex.Replace(pathAsString, "([a-zA-Z])", " $1 ");
+#else
+				pathAsString = pathAsString.Replace("Infinity", "0", StringComparison.Ordinal);
+#endif
+				pathAsString = SeparateLetterCharsWithSpaces(pathAsString);
+#if NETSTANDARD2_0
 				pathAsString = pathAsString.Replace("-", " -");
 				pathAsString = pathAsString.Replace(" E  -", "E-");
 				pathAsString = pathAsString.Replace(" e  -", "e-");
+#else
+				pathAsString = pathAsString.Replace("-", " -", StringComparison.Ordinal);
+				pathAsString = pathAsString.Replace(" E  -", "E-", StringComparison.Ordinal);
+				pathAsString = pathAsString.Replace(" e  -", "e-", StringComparison.Ordinal);
+#endif
 #if DEBUG_PATH
 				System.Diagnostics.Debug.WriteLine(aPathString);
 #endif
@@ -202,6 +211,25 @@ namespace Microsoft.Maui.Graphics
 #if DEBUG
 				throw;
 #endif
+			}
+
+			static string SeparateLetterCharsWithSpaces(string input)
+			{
+				var sb = new StringBuilder(input.Length, maxCapacity: 3 * input.Length);
+				foreach (var character in input)
+				{
+					if (char.IsLetter(character))
+					{
+						sb.Append(' ');
+						sb.Append(character);
+						sb.Append(' ');
+					}
+					else
+					{
+						sb.Append(character);
+					}
+				}
+				return sb.ToString();
 			}
 
 			return _path;

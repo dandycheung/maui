@@ -7,11 +7,14 @@ using Microsoft.Maui.Graphics;
 namespace Microsoft.Maui.Controls.Compatibility
 {
 	[ContentProperty(nameof(Children))]
+	[Obsolete("Use Microsoft.Maui.Controls.StackLayout instead. For more information, see https://learn.microsoft.com/dotnet/maui/migration/layouts")]
 	public class StackLayout : Layout<View>, IElementConfiguration<StackLayout>, IView
 	{
+		/// <summary>Bindable property for <see cref="Orientation"/>.</summary>
 		public static readonly BindableProperty OrientationProperty = BindableProperty.Create(nameof(Orientation), typeof(StackOrientation), typeof(StackLayout), StackOrientation.Vertical,
 			propertyChanged: (bindable, oldvalue, newvalue) => ((StackLayout)bindable).InvalidateLayout());
 
+		/// <summary>Bindable property for <see cref="Spacing"/>.</summary>
 		public static readonly BindableProperty SpacingProperty = BindableProperty.Create(nameof(Spacing), typeof(double), typeof(StackLayout), 6d,
 			propertyChanged: (bindable, oldvalue, newvalue) => ((StackLayout)bindable).InvalidateLayout());
 
@@ -43,6 +46,7 @@ namespace Microsoft.Maui.Controls.Compatibility
 			set { SetValue(SpacingProperty, value); }
 		}
 
+#pragma warning disable CS0672 // Member overrides obsolete member
 		protected override void LayoutChildren(double x, double y, double width, double height)
 		{
 			if (!HasVisibleChildren())
@@ -70,8 +74,11 @@ namespace Microsoft.Maui.Controls.Compatibility
 					LayoutChildIntoBoundingRegion(child, layoutInformationCopy.Plots[i], layoutInformationCopy.Requests[i]);
 			}
 		}
+#pragma warning restore CS0672 // Member overrides obsolete member
 
+#pragma warning disable CS0672 // Member overrides obsolete member
 		protected override SizeRequest OnMeasure(double widthConstraint, double heightConstraint)
+#pragma warning restore CS0672 // Member overrides obsolete member
 		{
 			if (!HasVisibleChildren())
 			{
@@ -90,7 +97,7 @@ namespace Microsoft.Maui.Controls.Compatibility
 			ComputeConstraintForView(view, false);
 		}
 
-		internal override void InvalidateMeasureInternal(InvalidationTrigger trigger)
+		internal override void InvalidateMeasureInternal(InvalidationEventArgs trigger)
 		{
 			_layoutInformation = new LayoutInformation();
 			base.InvalidateMeasureInternal(trigger);

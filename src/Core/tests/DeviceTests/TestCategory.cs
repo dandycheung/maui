@@ -26,6 +26,7 @@
 		public const string IndicatorView = "IndicatorView";
 		public const string Label = "Label";
 		public const string Layout = "Layout";
+		public const string Memory = "Memory";
 		public const string NavigationView = "NavigationView";
 		public const string Page = "Page";
 		public const string Picker = "Picker";
@@ -36,6 +37,7 @@
 		public const string ShapeView = "ShapeView";
 		public const string Slider = "Slider";
 		public const string Stepper = "Stepper";
+		public const string SwipeView = "SwipeView";
 		public const string Switch = "Switch";
 		public const string TextFormatting = "Formatting";
 		public const string TimePicker = "TimePicker";

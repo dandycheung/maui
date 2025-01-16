@@ -1,6 +1,11 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Devices;
+using Microsoft.Maui.Graphics;
+using Microsoft.UI.Windowing;
+using Microsoft.UI.Xaml;
 using Windows.Graphics;
 using Windows.Graphics.Display;
 using WinRT.Interop;
@@ -9,12 +14,49 @@ namespace Microsoft.Maui.Platform
 {
 	public static partial class WindowExtensions
 	{
+		internal static Rect[]? GetDefaultTitleBarDragRectangles(this UI.Xaml.Window platformWindow, IWindow window)
+		{
+			if (window?.Handler?.MauiContext is IMauiContext mauiContext)
+			{
+				return platformWindow.GetDefaultTitleBarDragRectangles(mauiContext);
+			}
+
+			return null;
+		}
+
+		internal static Rect[]? GetDefaultTitleBarDragRectangles(this UI.Xaml.Window platformWindow, IMauiContext mauiContext)
+		{
+			if (!AppWindowTitleBar.IsCustomizationSupported())
+				return null;
+
+			if (mauiContext?.GetNavigationRootManager()?.RootView is WindowRootView rootView &&
+				rootView.AppTitleBarContainer is FrameworkElement element)
+			{
+				return new[]
+				{
+					new Rect((int)element.Margin.Left, 0, (int)element.ActualWidth, (int)element.ActualHeight),
+				};
+			}
+
+			return null;
+		}
+
 		public static void UpdateTitle(this UI.Xaml.Window platformWindow, IWindow window)
 		{
-			platformWindow.Title = window.Title;
+			platformWindow.UpdateTitle(window, window.Handler?.MauiContext);
+		}
 
-			if (platformWindow is MauiWinUIWindow mauiWindow)
-				mauiWindow.UpdateTitleOnCustomTitleBar();
+		internal static void UpdateTitle(this UI.Xaml.Window platformWindow, IWindow window, IMauiContext? mauiContext)
+		{
+			platformWindow.Title = window.Title;
+			mauiContext?
+				.GetNavigationRootManager()?
+				.SetTitle(window.Title);
+		}
+
+		internal static void UpdateTitleBar(this UI.Xaml.Window platformWindow, IWindow window, IMauiContext? mauiContext)
+		{
+			mauiContext?.GetNavigationRootManager().SetTitleBar(window.TitleBar, mauiContext);
 		}
 
 		public static void UpdateX(this UI.Xaml.Window platformWindow, IWindow window) =>
@@ -175,6 +217,9 @@ namespace Microsoft.Maui.Platform
 					return window;
 			}
 
+			if (platformWindow is MauiWinUIWindow mauiWindow)
+				return mauiWindow?.Window;
+
 			return null;
 		}
 
@@ -193,9 +238,32 @@ namespace Microsoft.Maui.Platform
 			var hwnd = platformWindow.GetWindowHandle();
 
 			if (hwnd == IntPtr.Zero)
+			{
 				return 1.0f;
+			}
 
 			return PlatformMethods.GetDpiForWindow(hwnd) / DeviceDisplay.BaseLogicalDpi;
+		}
+
+		internal static void Minimize(this UI.Xaml.Window platformWindow)
+		{
+			PlatformMethods
+				.ShowWindow(platformWindow.GetWindowHandle(),
+							PlatformMethods.ShowWindowFlags.SW_MINIMIZE);
+		}
+
+		internal static void Maximize(this UI.Xaml.Window platformWindow)
+		{
+			PlatformMethods
+				.ShowWindow(platformWindow.GetWindowHandle(),
+							PlatformMethods.ShowWindowFlags.SW_MAXIMIZE);
+		}
+
+		internal static void Restore(this UI.Xaml.Window platformWindow)
+		{
+			PlatformMethods
+				.ShowWindow(platformWindow.GetWindowHandle(),
+							PlatformMethods.ShowWindowFlags.SW_RESTORE);
 		}
 
 		public static UI.Windowing.AppWindow? GetAppWindow(this UI.Xaml.Window platformWindow)

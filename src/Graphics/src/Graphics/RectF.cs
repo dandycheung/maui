@@ -50,7 +50,7 @@ namespace Microsoft.Maui.Graphics
 
 		public override bool Equals(object obj)
 		{
-			if (ReferenceEquals(null, obj))
+			if (obj is null)
 				return false;
 			return obj is RectF && Equals((RectF)obj);
 		}
@@ -207,7 +207,7 @@ namespace Microsoft.Maui.Graphics
 
 		public RectF Round()
 		{
-			return new RectF((float)Math.Round(X), (float)Math.Round(Y), (float)Math.Round(Width), (float)Math.Round(Height));
+			return new RectF(MathF.Round(X), MathF.Round(Y), MathF.Round(Width), MathF.Round(Height));
 		}
 
 		public void Deconstruct(out float x, out float y, out float width, out float height)

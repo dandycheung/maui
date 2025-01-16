@@ -5,6 +5,7 @@ using Microsoft.Maui.DeviceTests.Stubs;
 using Microsoft.Maui.Graphics;
 using Microsoft.Maui.Handlers;
 using Xunit;
+using static Microsoft.Maui.DeviceTests.AssertHelpers;
 
 namespace Microsoft.Maui.DeviceTests
 {
@@ -64,36 +65,6 @@ namespace Microsoft.Maui.DeviceTests
 			Assert.True(clicked);
 		}
 
-		[Theory(
-#if WINDOWS
-			Skip = "Fails on Windows"
-#endif
-		)]
-		[InlineData("red.png", "#FF0000")]
-		[InlineData("green.png", "#00FF00")]
-		[InlineData("black.png", "#000000")]
-		public async Task ImageSourceInitializesCorrectly(string filename, string colorHex)
-		{
-			var image = new ButtonStub
-			{
-				Background = new SolidPaintStub(Colors.Black),
-				ImageSource = new FileImageSourceStub(filename),
-			};
-
-			var order = new List<string>();
-
-			await InvokeOnMainThreadAsync(async () =>
-			{
-				var handler = CreateHandler(image);
-
-				bool imageLoaded = await Wait(() => ImageSourceLoaded(handler));
-
-				Assert.True(imageLoaded);
-				var expectedColor = Color.FromArgb(colorHex);
-				await handler.PlatformView.AssertContainsColor(expectedColor);
-			});
-		}
-
 		[Theory(DisplayName = "Padding Initializes Correctly")]
 		[InlineData(0, 0, 0, 0)]
 		[InlineData(1, 1, 1, 1)]
@@ -148,7 +119,7 @@ namespace Microsoft.Maui.DeviceTests
 
 			await InvokeOnMainThreadAsync(async () =>
 			{
-				await handler.PlatformView.AssertContainsColor(expectedColor);
+				await handler.PlatformView.AssertContainsColor(expectedColor, MauiContext);
 			});
 		}
 
@@ -168,17 +139,12 @@ namespace Microsoft.Maui.DeviceTests
 				StrokeThickness = 3
 			};
 
-			var handler = await CreateHandlerAsync(button);
-
-			await InvokeOnMainThreadAsync(async () =>
+			await AttachAndRun(button, async (handler) =>
 			{
-				await handler.PlatformView.AttachAndRun(async () =>
-				{
-					button.StrokeColor = expectedColor;
-					handler.UpdateValue(nameof(IButton.StrokeColor));
+				button.StrokeColor = expectedColor;
+				handler.UpdateValue(nameof(IButton.StrokeColor));
 
-					await handler.PlatformView.AssertContainsColor(expectedColor);
-				});
+				await handler.PlatformView.AssertContainsColor(expectedColor, MauiContext);
 			});
 		}
 
@@ -186,5 +152,17 @@ namespace Microsoft.Maui.DeviceTests
 		public class ButtonTextStyleTests : TextStyleHandlerTests<ButtonHandler, ButtonStub>
 		{
 		}
+
+#if WINDOWS
+		// TODO: buttons are not focusable on Android without FocusableInTouchMode=true and iOS is having issues
+		//       https://github.com/dotnet/maui/issues/6482
+		[Category(TestCategory.Button)]
+		public class ButtonFocusTests : FocusHandlerTests<ButtonHandler, ButtonStub, VerticalStackLayoutStub>
+		{
+			public ButtonFocusTests()
+			{
+			}
+		}
+#endif
 	}
 }

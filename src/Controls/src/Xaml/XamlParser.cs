@@ -28,8 +28,10 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Xml;
 using Microsoft.Maui.Controls.Internals;
 using Microsoft.Maui.Devices;
@@ -75,7 +77,7 @@ namespace Microsoft.Maui.Controls.Xaml
 								name = new XmlName(reader.NamespaceURI, reader.LocalName);
 
 							if (node.Properties.ContainsKey(name))
-								throw new XamlParseException($"'{reader.Name}' is a duplicate property name.", (IXmlLineInfo)reader);
+								throw new XamlParseException($"'{reader.Name}' is a duplicate property name.", ((IXmlLineInfo)reader).Clone());
 
 							INode prop = null;
 							if (reader.IsEmptyElement)
@@ -90,7 +92,7 @@ namespace Microsoft.Maui.Controls.Xaml
 						else if (reader.NamespaceURI == X2009Uri && reader.LocalName == "Arguments")
 						{
 							if (node.Properties.ContainsKey(XmlName.xArguments))
-								throw new XamlParseException($"'x:Arguments' is a duplicate directive name.", (IXmlLineInfo)reader);
+								throw new XamlParseException($"'x:Arguments' is a duplicate directive name.", ((IXmlLineInfo)reader).Clone());
 
 							var prop = ReadNode(reader);
 							if (prop != null)
@@ -101,7 +103,7 @@ namespace Microsoft.Maui.Controls.Xaml
 								 (node.XmlType.Name == "DataTemplate" || node.XmlType.Name == "ControlTemplate"))
 						{
 							if (node.Properties.ContainsKey(XmlName._CreateContent))
-								throw new XamlParseException($"Multiple child elements in {node.XmlType.Name}", (IXmlLineInfo)reader);
+								throw new XamlParseException($"Multiple child elements in {node.XmlType.Name}", ((IXmlLineInfo)reader).Clone());
 
 							var prop = ReadNode(reader, true);
 							if (prop != null)
@@ -187,7 +189,7 @@ namespace Microsoft.Maui.Controls.Xaml
 						break;
 				}
 			}
-			throw new XamlParseException("Closing PropertyElement expected", (IXmlLineInfo)reader);
+			throw new XamlParseException("Closing PropertyElement expected", ((IXmlLineInfo)reader).Clone());
 		}
 
 		internal static IList<XmlType> GetTypeArguments(XmlReader reader) => GetTypeArguments(ParseXamlAttributes(reader, out _));
@@ -355,6 +357,10 @@ namespace Microsoft.Maui.Controls.Xaml
 			}
 		}
 
+		[RequiresUnreferencedCode(TrimmerConstants.XamlRuntimeParsingNotSupportedWarning)]
+#if !NETSTANDARD
+		[RequiresDynamicCode(TrimmerConstants.XamlRuntimeParsingNotSupportedWarning)]
+#endif
 		public static Type GetElementType(XmlType xmlType, IXmlLineInfo xmlInfo, Assembly currentAssembly,
 			out XamlParseException exception)
 		{
@@ -368,7 +374,12 @@ namespace Microsoft.Maui.Controls.Xaml
 				s_xmlnsDefinitions,
 				currentAssembly?.FullName,
 				(typeInfo) =>
-					Type.GetType($"{typeInfo.clrNamespace}.{typeInfo.typeName}, {typeInfo.assemblyName}"));
+				{
+					var t = Type.GetType($"{typeInfo.clrNamespace}.{typeInfo.typeName}, {typeInfo.assemblyName}");
+					if (t is not null && t.IsPublicOrVisibleInternal(currentAssembly))
+						return t;
+					return null;
+				});
 
 			var typeArguments = xmlType.TypeArguments;
 			exception = null;
@@ -421,5 +432,20 @@ namespace Microsoft.Maui.Controls.Xaml
 
 			return type;
 		}
+
+		public static bool IsPublicOrVisibleInternal(this Type type, Assembly assembly)
+		{
+			if (type.IsPublic || type.IsNestedPublic)
+				return true;
+			if (type.Assembly == assembly)
+				return true;
+			if (type.Assembly.IsVisibleInternal(assembly))
+				return true;
+			return false;
+		}
+
+		public static bool IsVisibleInternal(this Assembly from, Assembly to) =>
+			from.GetCustomAttributes<InternalsVisibleToAttribute>().Any(ca =>
+				ca.AssemblyName.StartsWith(to.GetName().Name, StringComparison.InvariantCulture));
 	}
 }

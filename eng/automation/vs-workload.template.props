@@ -3,6 +3,8 @@
   <PropertyGroup>
     <TargetName>Microsoft.NET.Sdk.Maui.Workload.@VSMAN_VERSION@</TargetName>
     <ManifestBuildVersion>@VS_COMPONENT_VERSION@</ManifestBuildVersion>
+    <EnableSideBySideManifests>true</EnableSideBySideManifests>
+    <UseVisualStudioComponentPrefix>false</UseVisualStudioComponentPrefix>
   </PropertyGroup>
   <ItemGroup>
     <!-- Shorten package names to avoid long path caching issues in Visual Studio -->
@@ -28,6 +30,5 @@
     <ComponentResources Include="maui-ios"          Version="@VS_COMPONENT_VERSION@" Category=".NET" Title=".NET MAUI SDK for iOS" Description=".NET SDK Workload for building MAUI applications that target iOS." />
     <ComponentResources Include="maui-windows"      Version="@VS_COMPONENT_VERSION@" Category=".NET" Title=".NET MAUI SDK for Windows" Description=".NET SDK Workload for building MAUI applications that target Windows." />
     <WorkloadPackages Include="$(NuGetPackagePath)\Microsoft.NET.Sdk.Maui.Manifest*.nupkg" Version="@VS_COMPONENT_VERSION@" SupportsMachineArch="true" />
-    <MultiTargetPackNames Include="Maui.Sdk;Maui.Templates" />
   </ItemGroup>
 </Project>

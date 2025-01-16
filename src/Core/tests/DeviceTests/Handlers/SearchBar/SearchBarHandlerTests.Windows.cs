@@ -3,32 +3,33 @@ using Microsoft.Maui.DeviceTests.Stubs;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Xunit;
+using static Microsoft.Maui.DeviceTests.AssertHelpers;
 
 namespace Microsoft.Maui.DeviceTests
 {
 	public partial class SearchBarHandlerTests
 	{
-		[Theory(DisplayName = "Is Text Prediction Enabled")]
-		[InlineData(true)]
-		[InlineData(false)]
-		public async Task IsTextPredictionEnabledCorrectly(bool isEnabled)
+		[Theory(DisplayName = "CancelButtonColor Initializes Correctly")]
+		[InlineData(0xFFFF0000)]
+		[InlineData(0xFF00FF00)]
+		[InlineData(0xFF0000FF)]
+		public async Task CancelButtonColorInitializesCorrectly(uint color)
 		{
+			var expected = Color.FromUint(color);
+
 			var searchBar = new SearchBarStub()
 			{
-				IsTextPredictionEnabled = isEnabled
+				Text = "Test",
+				CancelButtonColor = expected
 			};
 
-			await InvokeOnMainThreadAsync(async () =>
-			{
-				var searchBarHandler = CreateHandler(searchBar);
-				await searchBarHandler.PlatformView.AttachAndRun(async () =>
-				{
-					await AssertionExtensions.Wait(() => searchBarHandler.PlatformView.Width != 0);
-				});
-			});
+			// The cancel button won't exist in the SearchBar until the SearchBar is loaded (and OnApplyTemplate is called)
+			// so we need to attach the SearchBar to the running app before we can check the color
 
-			var nativeIsTextPredictionEnabled = await GetValueAsync(searchBar, GetNativeIsTextPredictionEnabled);
-			Assert.Equal(isEnabled, nativeIsTextPredictionEnabled);
+			await AttachAndRun(searchBar, async (searchBarHandler) =>
+			{
+				await ValidatePropertyInitValue(searchBar, () => searchBar.CancelButtonColor, GetNativeCancelButtonColor, expected);
+			});
 		}
 
 		static AutoSuggestBox GetNativeSearchBar(SearchBarHandler searchBarHandler) =>
@@ -36,6 +37,35 @@ namespace Microsoft.Maui.DeviceTests
 
 		string GetNativeText(SearchBarHandler searchBarHandler) =>
 			GetNativeSearchBar(searchBarHandler).Text;
+
+		static string SetNativeText(SearchBarHandler searchBarHandler, string value) =>
+			GetNativeSearchBar(searchBarHandler).Text = value;
+
+		static int GetCursorStartPosition(SearchBarHandler searchBarHandler)
+		{
+			var platformSearchBar = GetNativeSearchBar(searchBarHandler);
+
+			var textBox = platformSearchBar.GetFirstDescendant<TextBox>();
+
+			if (textBox is not null)
+			{
+				return textBox.GetCursorPosition();
+			}
+
+			return -1;
+		}
+
+		static void UpdateCursorStartPosition(SearchBarHandler searchBarHandler, int position)
+		{
+			var platformSearchBar = GetNativeSearchBar(searchBarHandler);
+
+			var textBox = platformSearchBar.GetFirstDescendant<TextBox>();
+
+			if (textBox is not null)
+			{
+				textBox.SelectionStart = position;
+			}
+		}
 
 		Color GetNativeTextColor(SearchBarHandler searchBarHandler)
 		{
@@ -68,6 +98,36 @@ namespace Microsoft.Maui.DeviceTests
 			}
 
 			return false;
+		}
+
+		bool GetNativeIsSpellCheckEnabled(SearchBarHandler searchBarHandler)
+		{
+			var platformSearchBar = GetNativeSearchBar(searchBarHandler);
+
+			var textBox = platformSearchBar.GetFirstDescendant<TextBox>();
+
+			if (textBox is not null)
+			{
+				return textBox.IsSpellCheckEnabled;
+			}
+
+			return false;
+		}
+
+		Color GetNativeCancelButtonColor(SearchBarHandler searchBarHandler)
+		{
+			var platformSearchBar = GetNativeSearchBar(searchBarHandler);
+			var cancelButton = platformSearchBar.GetDescendantByName<Button>("DeleteButton");
+
+			if (cancelButton is not null)
+			{
+				var foreground = cancelButton.Foreground;
+
+				if (foreground is SolidColorBrush solidColorBrush)
+					return solidColorBrush.Color.ToColor();
+			}
+
+			return Colors.Transparent;
 		}
 	}
 }

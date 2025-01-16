@@ -102,21 +102,21 @@ namespace Microsoft.Maui.Controls.Platform
 
 				// LineHeight
 				if (span.LineHeight >= 0)
-					spannable.SetSpan(new LineHeightSpan(span.LineHeight), start, end, SpanTypes.InclusiveExclusive);
+					spannable.SetSpan(new PlatformLineHeightSpan(context, (float)span.LineHeight, (float)defaultFontSize), start, end, SpanTypes.InclusiveExclusive);
 
 				// CharacterSpacing
 				var characterSpacing = span.CharacterSpacing >= 0
 					? span.CharacterSpacing
 					: defaultCharacterSpacing;
 				if (characterSpacing >= 0)
-					spannable.SetSpan(new LetterSpacingSpan(characterSpacing.ToEm()), start, end, SpanTypes.InclusiveInclusive);
+					spannable.SetSpan(new PlatformFontSpan(characterSpacing.ToEm()), start, end, SpanTypes.InclusiveInclusive);
 
 				// Font
 				var font = span.ToFont(defaultFontSize);
 				if (font.IsDefault && defaultFont.HasValue)
 					font = defaultFont.Value;
 				if (!font.IsDefault)
-					spannable.SetSpan(new FontSpan(font, fontManager, context), start, end, SpanTypes.InclusiveInclusive);
+					spannable.SetSpan(new PlatformFontSpan(context ?? AAplication.Context, font.ToTypeface(fontManager), font.AutoScalingEnabled, (float)font.Size), start, end, SpanTypes.InclusiveInclusive);
 
 				// TextDecorations
 				var textDecorations = span.IsSet(Span.TextDecorationsProperty)
@@ -131,13 +131,14 @@ namespace Microsoft.Maui.Controls.Platform
 			return spannable;
 		}
 
+#pragma warning disable CS0618 // Type or member is obsolete
 		public static void RecalculateSpanPositions(this TextView textView, Label element, SpannableString spannableString, SizeRequest finalSize)
+#pragma warning restore CS0618 // Type or member is obsolete
 		{
-			if (element?.FormattedText?.Spans == null || element.FormattedText.Spans.Count == 0)
+			if (element?.FormattedText?.Spans is null || element.FormattedText.Spans.Count == 0)
 				return;
 
 			var labelWidth = finalSize.Request.Width;
-
 			if (labelWidth <= 0 || finalSize.Request.Height <= 0)
 				return;
 
@@ -145,13 +146,15 @@ namespace Microsoft.Maui.Controls.Platform
 				return;
 
 			var layout = textView.Layout;
-
 			if (layout == null)
 				return;
 
 			int next = 0;
 			int count = 0;
-			IList<int> totalLineHeights = new List<int>();
+
+			var padding = element.Padding;
+			var padLeft = (int)textView.Context.ToPixels(padding.Left);
+			var padTop = (int)textView.Context.ToPixels(padding.Top);
 
 #pragma warning disable CA1416
 			var strlen = spannableString.Length();
@@ -169,7 +172,7 @@ namespace Microsoft.Maui.Controls.Platform
 					continue;
 
 				// Find the next span
-				next = spannableString.NextSpanTransition(i, strlen, type);
+				next = spannableString.NextSpanTransition(i, spannableString.Length(), type);
 
 				// Get all spans in the range - Android can have overlapping spans				
 				var spans = spannableString.GetSpans(i, next, type);
@@ -180,121 +183,52 @@ namespace Microsoft.Maui.Controls.Platform
 				var startSpan = spans[0];
 				var endSpan = spans[spans.Length - 1];
 
-				var startSpanOffset = spannableString.GetSpanStart(startSpan);
-				var endSpanOffset = spannableString.GetSpanEnd(endSpan);
+				var spanStartOffset = spannableString.GetSpanStart(startSpan);
+				var spanEndOffset = spannableString.GetSpanEnd(endSpan);
 
-				var thisLine = layout.GetLineForOffset(endSpanOffset);
-				var lineStart = layout.GetLineStart(thisLine);
-				var lineEnd = layout.GetLineEnd(thisLine);
+				var spanStartLine = layout.GetLineForOffset(spanStartOffset);
+				var spanEndLine = layout.GetLineForOffset(spanEndOffset);
 
-				// If this is true, endSpanOffset has the value for another line that belong to the next span and not it self. 
-				// So it should be rearranged to value not pass the lineEnd.
-				if (endSpanOffset > (lineEnd - lineStart))
-					endSpanOffset = lineEnd;
-
-				var startX = layout.GetPrimaryHorizontal(startSpanOffset);
-				var endX = layout.GetPrimaryHorizontal(endSpanOffset);
-
-				var startLine = layout.GetLineForOffset(startSpanOffset);
-				var endLine = layout.GetLineForOffset(endSpanOffset);
-
-				double[] lineHeights = new double[endLine - startLine + 1];
-
-				// Calculate all the different line heights
-				for (var lineCount = startLine; lineCount <= endLine; lineCount++)
+				// Go through all lines that are affected by the span and calculate a rectangle for each
+				List<Graphics.Rect> spanRectangles = new List<Graphics.Rect>();
+				for (var curLine = spanStartLine; curLine <= spanEndLine; curLine++)
 				{
-					var lineHeight = layout.GetLineBottom(lineCount) - layout.GetLineTop(lineCount);
-					lineHeights[lineCount - startLine] = lineHeight;
+					global::Android.Graphics.Rect bounds = new global::Android.Graphics.Rect();
+					layout.GetLineBounds(curLine, bounds);
 
-					if (totalLineHeights.Count <= lineCount)
-						totalLineHeights.Add(lineHeight);
+					var lineHeight = bounds.Height();
+					var lineStartOffset = layout.GetLineStart(curLine);
+
+					// Retrieve the offset of the last visible character on the current line.
+					// The method `GetLineVisibleEnd(curLine)` returns the position right after the last visible character on the line.
+					// To get the exact offset of the last visible character, subtract 1 from this position.
+					var lineVisibleEndOffset = layout.GetLineVisibleEnd(curLine) - 1;
+
+					var startOffset = (curLine == spanStartLine) ? spanStartOffset : lineStartOffset;
+					var spanStartX = (int)layout.GetPrimaryHorizontal(startOffset);
+
+					var endOffset = (curLine == spanEndLine) ? spanEndOffset : lineVisibleEndOffset;
+					var validEndOffset = System.Math.Min(endOffset, layout.GetLineEnd(curLine));
+					var spanEndX = (int)layout.GetSecondaryHorizontal(validEndOffset);
+
+					var spanWidth = spanEndX - spanStartX;
+					var spanLeftX = spanStartX;
+
+					// If rtl is used, startX would be bigger than endX
+					if (spanStartX > spanEndX)
+					{
+						spanWidth = spanStartX - spanEndX;
+						spanLeftX = spanEndX;
+					}
+
+					if (spanWidth > 1)
+					{
+						var rectangle = new Graphics.Rect(spanLeftX + padLeft, bounds.Top + padTop, spanWidth, lineHeight);
+						spanRectangles.Add(rectangle);
+					}
 				}
 
-				var yaxis = 0.0;
-
-				for (var line = startLine; line > 0; line--)
-					yaxis += totalLineHeights[line];
-
-				((ISpatialElement)span).Region = Region.FromLines(lineHeights, labelWidth, startX, endX, yaxis).Inflate(10);
-			}
-		}
-
-		class FontSpan : MetricAffectingSpan
-		{
-			readonly Font _font;
-			readonly IFontManager _fontManager;
-			readonly Context? _context;
-
-			public FontSpan(Font font, IFontManager fontManager, Context? context)
-			{
-				_font = font;
-				_fontManager = fontManager;
-				_context = context;
-			}
-
-			public override void UpdateDrawState(TextPaint? tp)
-			{
-				if (tp != null)
-					Apply(tp);
-			}
-
-			public override void UpdateMeasureState(TextPaint p)
-			{
-				Apply(p);
-			}
-
-			void Apply(TextPaint paint)
-			{
-				paint.SetTypeface(_font.ToTypeface(_fontManager));
-
-				paint.TextSize = TypedValue.ApplyDimension(
-					_font.AutoScalingEnabled ? ComplexUnitType.Sp : ComplexUnitType.Dip,
-					(float)_font.Size,
-					(_context ?? AAplication.Context)?.Resources?.DisplayMetrics);
-			}
-		}
-
-		class LetterSpacingSpan : MetricAffectingSpan
-		{
-			readonly float _letterSpacing;
-
-			public LetterSpacingSpan(double letterSpacing)
-			{
-				_letterSpacing = (float)letterSpacing;
-			}
-
-			public override void UpdateDrawState(TextPaint? tp)
-			{
-				if (tp != null)
-					Apply(tp);
-			}
-
-			public override void UpdateMeasureState(TextPaint p)
-			{
-				Apply(p);
-			}
-
-			void Apply(TextPaint paint)
-			{
-				paint.LetterSpacing = _letterSpacing;
-			}
-		}
-
-		class LineHeightSpan : Java.Lang.Object, ILineHeightSpan
-		{
-			readonly double _relativeLineHeight;
-
-			public LineHeightSpan(double relativeLineHeight)
-			{
-				_relativeLineHeight = relativeLineHeight;
-			}
-
-			public void ChooseHeight(Java.Lang.ICharSequence? text, int start, int end, int spanstartv, int lineHeight, Paint.FontMetricsInt? fm)
-			{
-				if (fm is null)
-					return;
-
-				fm.Ascent = (int)(fm.Top * _relativeLineHeight);
+				((ISpatialElement)span).Region = Region.FromRectangles(spanRectangles).Inflate(10);
 			}
 		}
 	}

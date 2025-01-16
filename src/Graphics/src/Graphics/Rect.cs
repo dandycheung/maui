@@ -49,7 +49,7 @@ namespace Microsoft.Maui.Graphics
 
 		public override bool Equals(object obj)
 		{
-			if (ReferenceEquals(null, obj))
+			if (obj is null)
 				return false;
 			return obj is Rect && Equals((Rect)obj);
 		}
@@ -221,6 +221,7 @@ namespace Microsoft.Maui.Graphics
 
 		public static bool TryParse(string value, out Rect rectangle)
 		{
+			// IMPORTANT! Update RectTypeDesignConverter.IsValid if making changes here
 			if (!string.IsNullOrEmpty(value))
 			{
 				string[] xywh = value.Split(',');

@@ -16,7 +16,9 @@ namespace Microsoft.Maui.Controls.Core.UnitTests
 		public async Task NavigationPageInitialPage()
 		{
 			var lcPage = new LCPage();
-			var navigationPage = new TestNavigationPage(true, lcPage);
+			var navigationPage = new TestNavigationPage(true, lcPage)
+					.AddToTestWindow();
+
 			await navigationPage.NavigatingTask;
 			Assert.Null(lcPage.NavigatingFromArgs);
 			Assert.Null(lcPage.NavigatedFromArgs);
@@ -31,10 +33,15 @@ namespace Microsoft.Maui.Controls.Core.UnitTests
 		{
 			var previousPage = new LCPage();
 			var lcPage = new LCPage();
-			NavigationPage navigationPage = new TestNavigationPage(useMaui, previousPage);
+			var navigationPage =
+				new TestNavigationPage(useMaui, previousPage)
+					.AddToTestWindow();
+
 			await navigationPage.PushAsync(lcPage);
 
 			Assert.NotNull(previousPage.NavigatingFromArgs);
+			Assert.NotNull(lcPage.NavigatedToArgs);
+			Assert.NotNull(previousPage.NavigatedFromArgs);
 			Assert.Equal(previousPage, lcPage.NavigatedToArgs.PreviousPage);
 			Assert.Equal(lcPage, previousPage.NavigatedFromArgs.DestinationPage);
 		}
@@ -47,7 +54,9 @@ namespace Microsoft.Maui.Controls.Core.UnitTests
 			var firstPage = new LCPage();
 			var poppedPage = new LCPage();
 
-			NavigationPage navigationPage = new TestNavigationPage(useMaui, firstPage);
+			NavigationPage navigationPage = new TestNavigationPage(useMaui, firstPage)
+					.AddToTestWindow();
+
 			await navigationPage.PushAsync(poppedPage);
 			await navigationPage.PopAsync();
 
@@ -64,7 +73,9 @@ namespace Microsoft.Maui.Controls.Core.UnitTests
 			var firstPage = new LCPage();
 			var poppedPage = new LCPage();
 
-			NavigationPage navigationPage = new TestNavigationPage(useMaui, firstPage);
+			NavigationPage navigationPage = new TestNavigationPage(useMaui, firstPage)
+					.AddToTestWindow();
+
 			await navigationPage.PushAsync(new ContentPage());
 			await navigationPage.PushAsync(new ContentPage());
 			await navigationPage.PushAsync(poppedPage);
@@ -80,7 +91,7 @@ namespace Microsoft.Maui.Controls.Core.UnitTests
 		{
 			var firstPage = new LCPage() { Title = "First Page" };
 			var secondPage = new LCPage() { Title = "Second Page" };
-			var tabbedPage = new TabbedPage() { Children = { firstPage, secondPage } };
+			var tabbedPage = new TabbedPage() { Children = { firstPage, secondPage } }.AddToTestWindow();
 
 			tabbedPage.CurrentPage = secondPage;
 			Assert.NotNull(firstPage.NavigatingFromArgs);
@@ -93,7 +104,10 @@ namespace Microsoft.Maui.Controls.Core.UnitTests
 		{
 			var firstPage = new LCPage() { Title = "First Page" };
 			var secondPage = new LCPage() { Title = "Second Page" };
-			var tabbedPage = new TabbedPage() { Children = { firstPage, secondPage } };
+			var tabbedPage = new TabbedPage().AddToTestWindow();
+
+			tabbedPage.Children.Add(firstPage);
+			tabbedPage.Children.Add(secondPage);
 			Assert.Null(firstPage.NavigatingFromArgs);
 			Assert.Null(firstPage.NavigatedFromArgs);
 			Assert.NotNull(firstPage.NavigatedToArgs);
@@ -105,7 +119,12 @@ namespace Microsoft.Maui.Controls.Core.UnitTests
 		{
 			var firstPage = new LCPage() { Title = "First Page" };
 			var secondPage = new LCPage() { Title = "Second Page" };
-			var flyoutPage = new FlyoutPage() { Flyout = firstPage };
+			var flyoutPage = new FlyoutPage()
+			{
+				Detail = new ContentPage() { Title = "Detail" },
+				Flyout = firstPage
+			}.AddToTestWindow();
+
 			flyoutPage.Flyout = secondPage;
 
 			Assert.NotNull(firstPage.NavigatingFromArgs);
@@ -118,7 +137,12 @@ namespace Microsoft.Maui.Controls.Core.UnitTests
 		{
 			var firstPage = new LCPage() { Title = "First Page" };
 			var secondPage = new LCPage() { Title = "Second Page" };
-			var flyoutPage = new FlyoutPage() { Detail = firstPage };
+			var flyoutPage = new FlyoutPage()
+			{
+				Detail = firstPage,
+				Flyout = new ContentPage() { Title = "Flyout" }
+			}.AddToTestWindow();
+
 			flyoutPage.Detail = secondPage;
 
 			Assert.NotNull(firstPage.NavigatingFromArgs);
@@ -141,6 +165,29 @@ namespace Microsoft.Maui.Controls.Core.UnitTests
 
 			Assert.Equal(1, previousPage.DisappearingCount);
 			Assert.Equal(1, lcPage.AppearingCount);
+		}
+
+		[Theory]
+		[InlineData(false)]
+		[InlineData(true)]
+		public async Task NavigationPagePropagatesEventsWhenCoveredByModal(bool useMaui)
+		{
+			var lcPage = new ContentPage();
+			var targetPage = new LCPage();
+			var modalPage = new ContentPage();
+			var window = new TestWindow(new TestNavigationPage(useMaui, lcPage));
+
+			await window.Page.Navigation.PushAsync(targetPage);
+			targetPage.ClearNavigationArgs();
+			await window.Navigation.PushModalAsync(modalPage);
+
+			Assert.NotNull(targetPage.NavigatingFromArgs);
+			Assert.Null(targetPage.NavigatedToArgs);
+
+			await window.Navigation.PopModalAsync();
+			Assert.NotNull(targetPage.NavigatedToArgs);
+
+			Assert.Equal(modalPage, targetPage.NavigatedToArgs.PreviousPage);
 		}
 
 		[Fact]
@@ -213,6 +260,101 @@ namespace Microsoft.Maui.Controls.Core.UnitTests
 
 			Assert.Equal(1, firstModalPage.DisappearingCount);
 			Assert.Equal(1, firstModalPage.AppearingCount);
+		}
+
+		[Fact]
+		public async Task LoadedUnLoadedEvents()
+		{
+			var previousPage = new LCPage();
+			var lcPage = new LCPage();
+			var navigationPage =
+				new TestNavigationPage(true, previousPage)
+					.AddToTestWindow();
+
+			await navigationPage.PushAsync(lcPage);
+
+			int loadedCnt = 0;
+			int unLoadedCnt = 0;
+			lcPage.Loaded += (_, _) => loadedCnt++;
+			lcPage.Unloaded += (_, _) => unLoadedCnt++;
+
+			Assert.Equal(1, loadedCnt);
+			Assert.Equal(0, unLoadedCnt);
+
+			await navigationPage.PopAsync();
+
+			Assert.Equal(1, loadedCnt);
+			Assert.Equal(1, unLoadedCnt);
+		}
+
+		[Fact]
+		public async Task LoadedFiresOnSecondSubscription()
+		{
+			var previousPage = new LCPage();
+			var lcPage = new LCPage();
+			var navigationPage =
+				new TestNavigationPage(true, previousPage)
+					.AddToTestWindow();
+
+			await navigationPage.PushAsync(lcPage);
+
+			int loadedCnt = 0;
+			lcPage.Loaded += OnLoaded;
+			Assert.Equal(1, loadedCnt);
+
+			lcPage.Loaded -= OnLoaded;
+			lcPage.Loaded += OnLoaded;
+			Assert.Equal(2, loadedCnt);
+
+			void OnLoaded(object sender, System.EventArgs e)
+			{
+				loadedCnt++;
+			}
+		}
+
+		[Fact]
+		public async Task LoadedFiresOnInitialSubscription()
+		{
+			var previousPage = new LCPage();
+			var lcPage = new LCPage();
+			var navigationPage =
+				new TestNavigationPage(true, previousPage)
+					.AddToTestWindow();
+
+			await navigationPage.PushAsync(lcPage);
+
+			int loadedCnt = 0;
+			int secondLoadedSubscriberCnt = 0;
+			int unLoadedCnt = 0;
+
+			Assert.True(lcPage.IsLoaded);
+
+			// Wire up to loaded event to setup wiring
+			lcPage.Loaded += (_, _) =>
+			{
+				loadedCnt++;
+			};
+
+			Assert.Equal(1, loadedCnt);
+
+			// Subscribing to loaded a second time
+			// Should fire the event on the new subsciber;
+			lcPage.Loaded += (_, _) =>
+			{
+				secondLoadedSubscriberCnt++;
+			};
+
+			lcPage.Unloaded += (_, _) => unLoadedCnt++;
+
+			Assert.Equal(1, loadedCnt);
+			Assert.Equal(1, secondLoadedSubscriberCnt);
+			Assert.Equal(0, unLoadedCnt);
+
+			await navigationPage.PopAsync();
+
+			Assert.Equal(1, loadedCnt);
+			Assert.Equal(1, secondLoadedSubscriberCnt);
+			Assert.Equal(1, unLoadedCnt);
 		}
 
 		public class LCPage : ContentPage

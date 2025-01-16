@@ -50,6 +50,7 @@ namespace Microsoft.Maui.Controls
 	/// <include file="../../../docs/Microsoft.Maui.Controls/ShellItem.xml" path="Type[@FullName='Microsoft.Maui.Controls.ShellItem']/Docs/*" />
 	[ContentProperty(nameof(Items))]
 	[EditorBrowsable(EditorBrowsableState.Never)]
+	[TypeConverter(typeof(ShellItemConverter))]
 	public class ShellItem : ShellGroupItem, IShellItemController, IElementConfiguration<ShellItem>, IPropertyPropagationController, IVisualTreeElement
 	{
 		#region PropertyKeys
@@ -109,10 +110,14 @@ namespace Microsoft.Maui.Controls
 				// Windows supports nested tabs so we want the tabs to display
 				// if the current shell section has multiple contents
 				if (ShellItemController.GetItems().Count > 1 ||
-					(CurrentItem as IShellSectionController).GetItems().Count > 1)
+					(CurrentItem as IShellSectionController)?.GetItems()?.Count > 1)
+				{
 					defaultShowTabs = true;
+				}
 				else
+				{
 					defaultShowTabs = false;
+				}
 #else
 
 				if (ShellItemController.GetItems().Count <= 1)
@@ -128,17 +133,18 @@ namespace Microsoft.Maui.Controls
 		#region IPropertyPropagationController
 		void IPropertyPropagationController.PropagatePropertyChanged(string propertyName)
 		{
-			PropertyPropagationExtensions.PropagatePropertyChanged(propertyName, this, Items);
+			PropertyPropagationExtensions.PropagatePropertyChanged(propertyName, this, ((IVisualTreeElement)this).GetVisualChildren());
 		}
 		#endregion
 
-		/// <include file="../../../docs/Microsoft.Maui.Controls/ShellItem.xml" path="//Member[@MemberName='CurrentItemProperty']/Docs/*" />
+		/// <summary>Bindable property for <see cref="CurrentItem"/>.</summary>
 		public static readonly BindableProperty CurrentItemProperty =
 			BindableProperty.Create(nameof(CurrentItem), typeof(ShellSection), typeof(ShellItem), null, BindingMode.TwoWay,
 				propertyChanged: OnCurrentItemChanged);
 
 
-		/// <include file="../../../docs/Microsoft.Maui.Controls/ShellItem.xml" path="//Member[@MemberName='ItemsProperty']/Docs/*" />
+		/// <summary>Bindable property for <see cref="Items"/>.</summary>
+
 		public static readonly BindableProperty ItemsProperty = ItemsPropertyKey.BindableProperty;
 		Lazy<PlatformConfigurationRegistry<ShellItem>> _platformConfigurationRegistry;
 
@@ -217,10 +223,10 @@ namespace Microsoft.Maui.Controls
 			result.Route = Routing.GenerateImplicitRoute(shellSection.Route);
 
 			result.Items.Add(shellSection);
-			result.SetBinding(TitleProperty, new Binding(nameof(Title), BindingMode.OneWay, source: shellSection));
-			result.SetBinding(IconProperty, new Binding(nameof(Icon), BindingMode.OneWay, source: shellSection));
-			result.SetBinding(FlyoutDisplayOptionsProperty, new Binding(nameof(FlyoutDisplayOptions), BindingMode.OneTime, source: shellSection));
-			result.SetBinding(FlyoutIconProperty, new Binding(nameof(FlyoutIcon), BindingMode.OneWay, source: shellSection));
+			result.SetBinding(TitleProperty, static (ShellSection section) => section.Title, BindingMode.OneWay, source: shellSection);
+			result.SetBinding(IconProperty, static (ShellSection section) => section.Icon, BindingMode.OneWay, source: shellSection);
+			result.SetBinding(FlyoutDisplayOptionsProperty, static (ShellSection section) => section.FlyoutDisplayOptions, BindingMode.OneTime, source: shellSection);
+			result.SetBinding(FlyoutIconProperty, static (ShellSection section) => section.FlyoutIcon, BindingMode.OneWay, source: shellSection);
 
 			return result;
 		}
@@ -265,7 +271,7 @@ namespace Microsoft.Maui.Controls
 			if (CurrentItem == child)
 			{
 				if (ShellItemController.GetItems().Count == 0)
-					ClearValue(CurrentItemProperty);
+					ClearValue(CurrentItemProperty, specificity: SetterSpecificity.FromHandler);
 				else
 					SetValueFromRenderer(CurrentItemProperty, ShellItemController.GetItems()[0]);
 			}
@@ -328,10 +334,7 @@ namespace Microsoft.Maui.Controls
 		internal override void SendDisappearing()
 		{
 			base.SendDisappearing();
-			if (CurrentItem != null)
-			{
-				CurrentItem.SendDisappearing();
-			}
+			CurrentItem?.SendDisappearing();
 		}
 
 		protected override void OnParentSet()
@@ -339,6 +342,31 @@ namespace Microsoft.Maui.Controls
 			base.OnParentSet();
 			if (this.IsVisibleItem && CurrentItem != null)
 				((IShellController)Parent)?.AppearanceChanged(CurrentItem, false);
+		}
+
+		private sealed class ShellItemConverter : TypeConverter
+		{
+			public override bool CanConvertFrom(ITypeDescriptorContext context, Type sourceType)
+				=> sourceType == typeof(ShellSection)
+					|| sourceType == typeof(ShellContent)
+					|| sourceType == typeof(TemplatedPage)
+					|| sourceType == typeof(MenuItem);
+
+			public override bool CanConvertTo(ITypeDescriptorContext context, Type destinationType)
+				=> false;
+
+			public override object ConvertFrom(ITypeDescriptorContext context, System.Globalization.CultureInfo culture, object value)
+				=> value switch
+				{
+					ShellSection shellSection => (ShellItem)shellSection,
+					ShellContent shellContent => (ShellItem)shellContent,
+					TemplatedPage page => (ShellItem)page,
+					MenuItem menuItem => (ShellItem)menuItem,
+					_ => throw new NotSupportedException(),
+				};
+
+			public override object ConvertTo(ITypeDescriptorContext context, System.Globalization.CultureInfo culture, object value, Type destinationType)
+				=> throw new NotSupportedException();
 		}
 	}
 }
